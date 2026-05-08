@@ -1,0 +1,4 @@
+#!/bin/bash
+# TODO: figure out if we can get rid of this script all together
+[[ $MOSH_VERSION ]] || . stacks/mosh/version
+printf %s\\n "$MOSH_VERSION"
