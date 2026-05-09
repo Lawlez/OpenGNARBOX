@@ -1,11 +1,16 @@
 GNARBOX 2.0 SSD: Reverse Engineering Findings
 
-Project Status: Firmware extracted, mounted, and initial OS architecture identified.
-Environment: Parrot OS (ARM64 via UTM on Apple Silicon M2).
+This is a goldmine. The ioctl handler reveals:
+
+
+ioctl 0x3E9 (1001) = encrypt — copies 16 bytes from userspace → AES encrypt → copies back
+ioctl 0x7D1 (2001) = decrypt — copies 16 bytes from userspace → AES decrypt → copies back
+ioctl 0xBB9 (3001) = test — encrypts "Attack at dawn!!" and prints plaintext/decryptext
+The AES key is hardcoded in the .data section and operates per-block (16 bytes at a time, ECB mode). 
 
 1. Hardware Profile (Inferred)
 
-Compute: 2.4 GHz Intel Quad-Core CPU (x86_64 architecture). Note: Even though you are analyzing it on an ARM64 Mac, the GNARBOX hardware is x86_64.
+Compute: 2.4 GHz Intel Quad-Core CPU (x86_64 architecture). 
 
 Memory: 4GB RAM.
 

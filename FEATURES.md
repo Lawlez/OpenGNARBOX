@@ -6,13 +6,13 @@ This document outlines the current capabilities of the OpenGNARBOX software stac
 
 | Feature | Original GNARBOX 2.0 | OpenGNARBOX (Current) | Status |
 | :--- | :---: | :---: | :--- |
-| **On-Device Backups** | ✅ (Single Button) | ❌ | In Development |
-| **Built-in OLED Screen** | ✅ (Full Menu) | ❌ | Reverse Engineering |
-| **Directional Buttons** | ✅ (Navigation) | ❌ | Reverse Engineering |
+| **On-Device Backups** | ✅ (Single Button) | ✅ | In Development |
+| **Built-in OLED Screen** | ✅ (Full Menu) | ✅ | via Original interfaces |
+| **Directional Buttons** | ✅ (Navigation) | ✅ | via Original interfaces |
 | **User Interface** | ⚠️ (Legacy Mobile App) | ✅ (Universal Web App) | **Improved (No App Needed)** |
 | **Performance** | ⚠️ (Legacy Bloat) | ✅ (Lightweight Core) | **Improved (Faster Indexing)** |
 | **Deduplication** | ✅ | ✅ (Deep Hash) | **Improved** |
-| **Transfer Progress** | ✅ (On-Device Screen + App) | ✅ (Only Web App) | Feature Parity |
+| **Transfer Progress** | ✅ (On-Device Screen + App) | ✅ (On-screen +  Web App) | Feature Parity |
 | **Security** | ❓ (Proprietary unsecured Firmware) | ✅ (Sandboxed, Secure Coding Practices) | **Improved** |
 | **Multi-File Downloads** | ⚠️ (Limited) | ✅ (Session-Based) | **Improved** |
 | **Battery Monitoring** | ✅ | ✅ (Via Web App) | Feature Parity |
@@ -52,5 +52,5 @@ OpenGNARBOX introduced a sandboxed file system environment. Even with administra
 
 ### 🏗️ Future Milestones (Reverse Engineering)
 We are currently working on the kernel drivers and userspace utilities required to:
-1.  **Re-enable the OLED Display**: Driving the screen via custom I2C/SPI drivers.
-2.  **Mapping Hardware Buttons**: Listening for GPIO events from the physical navigation buttons to trigger the **"One-Touch Backup"** logic without the WebUI.
+1.  **Re-enable the OLED Display**: Driving the screen via custom I2C/SPI drivers. ✅complete ✅
+2.  **Mapping Hardware Buttons**: Listening for GPIO events from the physical navigation buttons ✅complete ✅ to trigger the **"One-Touch Backup"** logic without the WebUI. working

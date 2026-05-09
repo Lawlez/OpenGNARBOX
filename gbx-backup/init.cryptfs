@@ -1,0 +1,23 @@
+#!/bin/bash
+
+if [ -b /dev/nvme0n1p1 ]; then
+    BDEV=/dev/nvme0n1
+else
+    BDEV=/dev/mmcblk0
+fi
+
+mkdir -p /boot/efi
+mount -o ro ${BDEV}p1 /boot/efi
+if [ -f /boot/efi/keys/app-data.key.blob ]; then
+    mknod /dev/gbxkr c 234 0
+    insmod /lib/modules/`uname -r`/extra/kr.ko
+    gbxkr -d -i /boot/efi/keys/app-data.key.blob -o /tmp/app-data.key
+    cryptsetup create --cipher aes-cbc-essiv:sha256 \
+        --key-size 128 --key-file /tmp/app-data.key app-data ${BDEV}p5
+    mkdir /app_data
+    mount /dev/mapper/app-data /app_data
+
+    shred /tmp/app-data.key
+    unlink /tmp/app-data.key
+fi
+umount /boot/efi

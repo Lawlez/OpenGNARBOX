@@ -1,3 +1,12 @@
 firmware/gbxos-install-image-check/.DS_Store
 firmware/.DS_Store
 .DS_Store
+reversingplan.md
+game-plan.md
+CLAUDE.md
+/gbx-boot-backup
+/gbx-backup
+firmware/gbxos-install-image-2.8.0.1714.zip
+firmware/gbxos-install-image/gbxos-install-image.wic
+firmware/*.sh
+firmware/*.shell

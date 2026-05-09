@@ -2,7 +2,10 @@
 
 > [!CAUTION]
 > **EARLY DEVELOPMENT PHASE**
-> This project is currently in the **early stages of active development** and is primarily in a **testing and reverse engineering phase**. The complete OpenGNARBOX software stack is **not yet fully functional**. The custom firmware images will be released at a later date. Use with extreme caution.
+> This Repositorys content is currently in the **early stages of active development** and is primarily in a **testing and reverse engineering phase**. The complete OpenGNARBOX software stack is **not yet fully functional**. The custom firmware images will be released at a later date. Use with extreme caution.
+
+> [!IMPORTANT]
+> **Reversing is done.** I have a locally working custom firwmare which runs on device. I am now in the so called "intergration hell" to get the new software stack and the hardware working together smoothly. i made good progress and should be able to release a beta version soon :) pls dont bug me about it tho 
 
 For a detailed look at implemented features vs. original hardware capabilities, see [FEATURES.md](./FEATURES.md).
 
@@ -49,15 +52,6 @@ A professional-grade **React (TypeScript)** web application.
 
 The easiest way to run OpenGNARBOX is using Docker Compose.
 
-### Running with Docker
-
-1.  **Clone the repository**
-2.  **Start the stack**
-    ```bash
-    docker-compose up -d
-    ```
-3.  **Access the UI**
-    Open your browser and navigate to `http://localhost:8000`.
 
 ### Running in Test/Mock Mode
 To run without requiring hardware mounts:
