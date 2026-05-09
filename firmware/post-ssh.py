@@ -269,15 +269,24 @@ def remove_docker_bloat(shell):
     run_cmd(shell, f"cp {stack_file} {stack_file}.bak 2>/dev/null || true")
     log_ok("Backed up services_stack_prod.yml")
 
-    # Remove the service definitions from the YAML
-    # We use sed to delete the service blocks for the removed services
+    # Remove the service definitions from the YAML using awk
+    # sed leaves empty keys (e.g. "  tapperd:") which breaks YAML parsing.
+    # awk properly skips the entire block from key to next sibling key.
+    log_info("Cleaning service definitions from stack YAML...")
+    stack_tmp = "/tmp/stack_clean.yml"
     for svc_short in ["grab", "overlookd", "tapperd"]:
-        # Delete from the line matching the service name to the next service or end
-        # This is a best-effort approach — complex YAML editing from shell is fragile
         run_cmd(shell,
-            f"sed -i '/^  {svc_short}:/,/^  [a-z]/{{/^  [a-z]/!d}}' {stack_file} 2>/dev/null || true",
+            f"awk '/^  {svc_short}:/{{skip=1; next}} /^  [a-z]/{{skip=0}} !skip' "
+            f"{stack_file} > {stack_tmp} && mv {stack_tmp} {stack_file}",
             quiet=True)
-    log_ok("Cleaned service definitions from stack YAML")
+    # Verify the YAML still has the expected structure
+    check = run_cmd(shell, f"head -3 {stack_file}", quiet=True)
+    if 'version' in check and 'services' in check:
+        log_ok("Cleaned service definitions from stack YAML")
+    else:
+        log_fail("Stack YAML may be corrupted — restoring from backup")
+        run_cmd(shell, f"cp {stack_file}.bak {stack_file}")
+        log_warn("Restored services_stack_prod.yml from backup")
 
     # Remove Docker images
     log_step("Removing Docker images")

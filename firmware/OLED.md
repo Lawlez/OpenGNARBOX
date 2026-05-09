@@ -29,5 +29,5 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 ```
-/usr/bin/oled-echo -s -- "" "OpenGNARBOX" "is ready :)"
+/usr/bin/oled-echo -s -- "" "" "     OpenGNARBOX" "" "     Reclaim your" "     Hardware" "" "     lwlx."
 Note: oled-echo talks to the OLED via SPI (/dev/spidev2.0). It works as a host-level binary, no Docker needed.
