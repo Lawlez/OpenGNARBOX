@@ -2,57 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ImporTool</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>OpenGNARBOX</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['"Fira Code"', 'monospace'], // Set Fira Code as default sans for the "hacker/technical" feel
-              mono: ['"Fira Code"', 'monospace'],
-            },
-            colors: {
-              gray: {
-                750: '#2d3748',
-                850: '#1a202c',
-                950: '#0d1117',
-              }
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      body {
-        background-color: #0d1117;
-        color: #e2e8f0;
-        /* Prevent selection during drag operations usually */
-        user-select: none;
-      }
-      /* Custom scrollbar for dark theme */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1a202c;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #4a5568;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #718096;
-      }
-    </style>
-<link rel="stylesheet" href="/index.css">
-</head>
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

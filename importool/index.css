@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * OpenGNARBOX — Offline-compatible CSS
+ * No external fonts or CDNs — GNARBOX has no internet.
+ * Uses system monospace fonts for the hacker aesthetic.
+ */
+
+body {
+  background-color: #0d1117;
+  color: #e2e8f0;
+  user-select: none;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono',
+               'Consolas', 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1a202c;
+}
+::-webkit-scrollbar-thumb {
+  background: #4a5568;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #718096;
+}
+
+/* iOS safe area for bottom tab bar */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Smooth momentum scrolling on mobile */
+@media (max-width: 768px) {
+  .overflow-hidden {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
