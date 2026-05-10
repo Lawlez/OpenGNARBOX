@@ -8,8 +8,10 @@
 # Stage 1: Build Frontend (Vite)
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/importool
-COPY importool/package.json importool/package-lock.json* ./
-RUN npm ci --no-audit --no-fund 2>/dev/null || npm install
+# Copy only package.json (NOT lockfile — lockfile has Mac-native rollup bindings
+# that fail on Alpine linux/amd64). Fresh npm install gets correct platform deps.
+COPY importool/package.json ./
+RUN npm install --no-audit --no-fund
 COPY importool/ ./
 RUN npm run build
 
