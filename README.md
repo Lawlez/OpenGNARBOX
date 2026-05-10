@@ -4,7 +4,7 @@
 > **EARLY DEVELOPMENT PHASE**
 > This Repositorys content is currently in the **early stages of active development** and is primarily in a **testing and reverse engineering phase**. The complete OpenGNARBOX software stack is **not yet fully functional**. The custom firmware images will be released at a later date. Use with extreme caution.
 
-> [UPDATE]
+> [!IMPORTANT]
 > **Reversing is done.** I have a locally working custom firwmare which runs on device. I am now in the so called "intergration hell" to get the new software stack and the hardware working together smoothly. i made good progress and should be able to release a beta version soon :) pls dont bug me about it tho 
 
 For a detailed look at implemented features vs. original hardware capabilities, see [FEATURES.md](./FEATURES.md).
