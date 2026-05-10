@@ -33,6 +33,12 @@ services:
       - /media:/media:shared
       # Battery / power sysfs
       - /sys/class/power_supply:/sys/class/power_supply:ro
+      # OLED display binary (host-level, talks to /dev/spidev2.0)
+      - /usr/bin/oled-echo:/usr/bin/oled-echo:ro
+      # Device nodes (SPI for OLED)
+      - /dev:/dev
+      # i2c sysfs for reboot control
+      - /sys/bus/i2c:/sys/bus/i2c:rw
       - /run/syslinkd/:/run/syslinkd/:ro
       - /run/shivad/:/run/shivad/:ro
       - /app_data:/app_data:ro

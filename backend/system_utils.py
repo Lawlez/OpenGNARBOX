@@ -1,11 +1,11 @@
 """OpenGNAR system utilities — file operations, hashing, and hardware monitoring.
 
 GNARBOX 2.0 device layout:
-  /media/GNARBOX     – 447 GB NVMe user storage (main backup target)
-  /media/<LABEL>     – SD cards auto-mounted by syslinkd (e.g. /media/EOS_DIGITAL)
-  /app_data/         – encrypted config partition (auth tokens, keys)
-  /run/syslinkd/     – network state Unix socket
-  /run/shivad/       – Docker orchestrator Unix socket
+  /media/GNARBOX          – 447 GB NVMe user storage (library + backup target)
+  /media/mmc_mmcblk2p1    – SD card mount point (syslinkd auto-mounts here)
+  /app_data/              – encrypted config partition (auth tokens, keys)
+  /run/syslinkd/          – network state Unix socket
+  /run/shivad/            – Docker orchestrator Unix socket
   /sys/class/power_supply/ – battery sysfs
 """
 
@@ -15,17 +15,17 @@ import hashlib
 import time
 import asyncio
 import zipfile
+import subprocess
 from typing import List, Dict, Any
 
 import aiofiles
 
 # ── Device paths ──────────────────────────────────────────────────────
 NVME_MOUNT_PATH = os.environ.get("NVME_MOUNT_PATH", "/media/GNARBOX")
+SD_MOUNT_PATH = os.environ.get("SD_MOUNT_PATH", "/media/mmc_mmcblk2p1")
 SD_MOUNT_ROOT = os.environ.get("SD_MOUNT_ROOT", "/media")
-BATTERY_SYSFS_PATH = "/sys/class/power_supply/BAT0/capacity"
-
-# Legacy compat aliases
-SD_MOUNT_PATH = SD_MOUNT_ROOT
+BATTERY_SYSFS_BASE = "/sys/class/power_supply"
+REBOOT_SYSFS_PATH = "/sys/bus/i2c/devices/i2c-GBX0001:00/system_state/cold_reboot"
 
 # ── Legacy service URLs (Docker DNS on ingress-net) ──────────────────
 TAPPERD_URL = os.environ.get("TAPPERD_URL", "http://tapperd:80")
@@ -41,6 +41,44 @@ MOCK_MODE = os.environ.get("MOCK_MODE", "0") == "1"
 
 # In mock mode, we want to simulate a filesystem.
 _mock_file_system: Dict[str, list] = {}
+
+
+# ── Dotfile filtering ─────────────────────────────────────────────────
+def _is_dotentry(name: str) -> bool:
+    """Return True if name starts with a dot (hidden/metadata entry)."""
+    return name.startswith('.')
+
+
+# ── OLED hardware display ─────────────────────────────────────────────
+def oled_display(lines: List[str], big: bool = False) -> None:
+    """Display text on the GNARBOX OLED screen via oled-echo.
+
+    Non-blocking fire-and-forget. Silently does nothing when the binary
+    is not available (e.g. running in dev/mock mode).
+
+    Args:
+        lines: List of strings, one per display line.
+        big:   Use large font (-b) instead of small (-s).
+    """
+    if MOCK_MODE:
+        return
+    try:
+        cmd = ["/usr/bin/oled-echo", "-b" if big else "-s", "--"] + lines
+        subprocess.Popen(  # pylint: disable=consider-using-with
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass  # oled-echo not available
+
+
+# ── Sysfs reader ──────────────────────────────────────────────────────
+def _read_sysfs(path: str) -> str:
+    """Read a single-line sysfs file, returning stripped content or empty string."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except (OSError, ValueError):
+        return ""
 
 
 def _is_within_sandbox(resolved_path: str) -> bool:
@@ -88,17 +126,62 @@ def get_storage_stats(path: str) -> Dict[str, object]:
 
 
 def get_battery_stats() -> Dict[str, object]:
-    """Return battery level and status from sysfs."""
+    """Return battery level and charging status from sysfs.
+
+    Dynamically discovers all entries under /sys/class/power_supply/.
+    Handles both Battery-type (capacity, status) and Mains-type (online)
+    power supplies.  The GNARBOX 2.0 has an ADP1 (AC adapter).
+    """
     if MOCK_MODE:
-        return {"level": 88, "status": "mock"}
+        return {"level": 88, "status": "mock", "ac_online": True}
+
+    result: Dict[str, object] = {
+        "level": None,
+        "status": "unknown",
+        "ac_online": False
+    }
+
+    if not os.path.isdir(BATTERY_SYSFS_BASE):
+        return result
 
     try:
-        if os.path.exists(BATTERY_SYSFS_PATH):
-            with open(BATTERY_SYSFS_PATH, 'r', encoding='utf-8') as f:
-                return {"level": int(f.read().strip()), "status": "ok"}
-    except (OSError, ValueError):
+        for supply in os.listdir(BATTERY_SYSFS_BASE):
+            supply_path = os.path.join(BATTERY_SYSFS_BASE, supply)
+            supply_type = _read_sysfs(os.path.join(supply_path, "type"))
+
+            if supply_type == "Mains":
+                online = _read_sysfs(os.path.join(supply_path, "online"))
+                result["ac_online"] = online == "1"
+                # Only set status from Mains if we don't have a Battery
+                if result["status"] == "unknown":
+                    result["status"] = "Charging" if online == "1" else "On Battery"
+
+            elif supply_type == "Battery":
+                capacity = _read_sysfs(os.path.join(supply_path, "capacity"))
+                if capacity:
+                    try:
+                        result["level"] = int(capacity)
+                    except ValueError:
+                        pass
+                bat_status = _read_sysfs(os.path.join(supply_path, "status"))
+                if bat_status:
+                    result["status"] = bat_status
+    except OSError:
         pass
-    return {"level": 85, "status": "mock"}
+
+    return result
+
+
+def trigger_reboot() -> bool:
+    """Trigger a cold reboot via the GNARBOX i2c controller."""
+    if MOCK_MODE:
+        return False
+    try:
+        with open(REBOOT_SYSFS_PATH, 'w', encoding='utf-8') as f:
+            f.write("1")
+        return True
+    except OSError:
+        return False
 
 
 def _get_file_type(ext: str) -> str:
@@ -153,8 +236,12 @@ def scan_dir(path: str) -> List[Dict[str, Any]]:
     if not os.path.exists(safe_path):
         return files
 
-    for root, _, filenames in os.walk(safe_path):
+    for root, dirs, filenames in os.walk(safe_path):
+        # Filter out dot-directories in-place so os.walk skips them
+        dirs[:] = [d for d in dirs if not _is_dotentry(d)]
         for name in filenames:
+            if _is_dotentry(name):
+                continue
             file_path = os.path.join(root, name)
             try:
                 stat = os.stat(file_path)
@@ -260,8 +347,11 @@ def check_duplicate(source: str, dest_dir: str) -> Dict[str, Any]:
     source_mtime_ms = int(source_stat.st_mtime * 1000)
     source_hash = None
 
-    for root, _, filenames in os.walk(safe_dest_dir):
+    for root, dirs, filenames in os.walk(safe_dest_dir):
+        dirs[:] = [d for d in dirs if not _is_dotentry(d)]
         for name in filenames:
+            if _is_dotentry(name):
+                continue
             candidate_path = os.path.join(root, name)
             try:
                 cand_stat = os.stat(candidate_path)
@@ -378,6 +468,8 @@ def list_dir_contents(path: str) -> List[Dict[str, Any]]:
     try:
         entries = os.listdir(safe_path)
         for name in entries:
+            if _is_dotentry(name):
+                continue
             full_path = os.path.join(safe_path, name)
             try:
                 stat = os.stat(full_path)
@@ -462,8 +554,11 @@ def create_zip_file(paths: List[str], output_path: str, max_mb: int = 4000) -> s
                 current_bytes += size
 
             elif os.path.isdir(safe_path):
-                for root, _, files in os.walk(safe_path):
+                for root, dirs, files in os.walk(safe_path):
+                    dirs[:] = [d for d in dirs if not _is_dotentry(d)]
                     for file in files:
+                        if _is_dotentry(file):
+                            continue
                         file_path = os.path.join(root, file)
                         size = os.path.getsize(file_path)
                         if current_bytes + size > max_bytes:
