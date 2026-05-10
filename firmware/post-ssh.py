@@ -30,16 +30,16 @@ DEFAULT_PASS = "reclaimGNARBOX!"
 
 # Docker services to remove (swarm service names)
 SERVICES_TO_REMOVE = [
-    "services_stack_grab",
-    "services_stack_overlookd",
-    "services_stack_tapperd",
+    #"services_stack_grab",
+    #"services_stack_overlookd",
+    #"services_stack_tapperd",
 ]
 
 # Docker images to remove after service deletion
 IMAGES_TO_REMOVE = [
-    "gnarbox/grab:2.8.0.1747",
-    "gnarbox/overlook:2.8.0.1747",
-    "gnarbox/tapper:2.8.0.1747",
+    #"gnarbox/grab:2.8.0.1747",
+    #"gnarbox/overlook:2.8.0.1747",
+    #"gnarbox/tapper:2.8.0.1747",
 ]
 
 # ANSI colors for output
@@ -272,16 +272,48 @@ def remove_docker_bloat(shell):
     # Remove the service definitions from the YAML using awk
     # sed leaves empty keys (e.g. "  tapperd:") which breaks YAML parsing.
     # awk properly skips the entire block from key to next sibling key.
+    # IMPORTANT: grab is the LAST service before the top-level `networks:` block.
+    # The awk pattern `/^  [a-z]/` won't match `networks:` (0-indent), so awk
+    # will eat everything from `grab:` to EOF including the networks block.
+    # We re-append it after cleanup.
     log_info("Cleaning service definitions from stack YAML...")
     stack_tmp = "/tmp/stack_clean.yml"
     for svc_short in ["grab", "overlookd", "tapperd"]:
         run_cmd(shell,
-            f"awk '/^  {svc_short}:/{{skip=1; next}} /^  [a-z]/{{skip=0}} !skip' "
+            f"awk '/^  {svc_short}:/{{skip=1; next}} /^  [a-z]/{{skip=0}} /^[a-z]/{{skip=0}} !skip' "
             f"{stack_file} > {stack_tmp} && mv {stack_tmp} {stack_file}",
             quiet=True)
+
+    # Ensure the top-level networks: block exists (awk may have eaten it)
+    # If `networks:` (0-indent) was removed but its children (`  ingress-net:`,
+    # `  outside:`) survived, they're now orphaned at service level.
+    # Strip orphans first, then re-append the complete block.
+    has_networks = run_cmd(shell, f"grep -c '^networks:' {stack_file}", quiet=True)
+    if has_networks.strip() == "0":
+        log_warn("networks: block was removed by awk — fixing")
+        # Remove orphaned network entries that look like services
+        for orphan in ["ingress-net", "outside"]:
+            run_cmd(shell,
+                f"awk '/^  {orphan}:/{{skip=1; next}} /^  [a-z]/{{skip=0}} /^[a-z]/{{skip=0}} !skip' "
+                f"{stack_file} > {stack_tmp} && mv {stack_tmp} {stack_file}",
+                quiet=True)
+        # Append the complete networks block
+        networks_block = (
+            "networks:\\n"
+            "  ingress-net:\\n"
+            "    external:\\n"
+            "      name: ingress-net\\n"
+            "  outside:\\n"
+            "    external:\\n"
+            "      name: host\\n"
+        )
+        run_cmd(shell, f'printf "\\n{networks_block}" >> {stack_file}', quiet=True)
+        log_ok("Restored networks: block")
+
     # Verify the YAML still has the expected structure
     check = run_cmd(shell, f"head -3 {stack_file}", quiet=True)
-    if 'version' in check and 'services' in check:
+    net_check = run_cmd(shell, f"grep -c '^networks:' {stack_file}", quiet=True)
+    if 'version' in check and 'services' in check and net_check.strip() != "0":
         log_ok("Cleaned service definitions from stack YAML")
     else:
         log_fail("Stack YAML may be corrupted — restoring from backup")

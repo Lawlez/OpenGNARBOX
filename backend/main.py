@@ -125,7 +125,7 @@ def _delete_file(req: PathRequest):
 @app.get("/api/files/list")
 def _list_files(path: str = "/media"):
     """List directory contents for the file browser."""
-    if path != "/media" and not is_safe_path(path):
+    if not is_safe_path(path):
         raise HTTPException(status_code=403, detail="Forbidden Path")
     try:
         files = list_dir_contents(path)

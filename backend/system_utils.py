@@ -1,4 +1,13 @@
-"""OpenGNAR system utilities — file operations, hashing, and hardware monitoring."""
+"""OpenGNAR system utilities — file operations, hashing, and hardware monitoring.
+
+GNARBOX 2.0 device layout:
+  /media/GNARBOX     – 447 GB NVMe user storage (main backup target)
+  /media/<LABEL>     – SD cards auto-mounted by syslinkd (e.g. /media/EOS_DIGITAL)
+  /app_data/         – encrypted config partition (auth tokens, keys)
+  /run/syslinkd/     – network state Unix socket
+  /run/shivad/       – Docker orchestrator Unix socket
+  /sys/class/power_supply/ – battery sysfs
+"""
 
 import os
 import shutil
@@ -10,9 +19,22 @@ from typing import List, Dict, Any
 
 import aiofiles
 
-NVME_MOUNT_PATH = "/media/nvme"
-SD_MOUNT_PATH = "/media/sd"
+# ── Device paths ──────────────────────────────────────────────────────
+NVME_MOUNT_PATH = os.environ.get("NVME_MOUNT_PATH", "/media/GNARBOX")
+SD_MOUNT_ROOT = os.environ.get("SD_MOUNT_ROOT", "/media")
 BATTERY_SYSFS_PATH = "/sys/class/power_supply/BAT0/capacity"
+
+# Legacy compat aliases
+SD_MOUNT_PATH = SD_MOUNT_ROOT
+
+# ── Legacy service URLs (Docker DNS on ingress-net) ──────────────────
+TAPPERD_URL = os.environ.get("TAPPERD_URL", "http://tapperd:80")
+TBD_URL = os.environ.get("TBD_URL", "http://tbd:80")
+MOONSHOTD_URL = os.environ.get("MOONSHOTD_URL", "http://moonshotd:80")
+OVERLOOKD_URL = os.environ.get("OVERLOOKD_URL", "http://overlookd:80")
+SHAMAND_URL = os.environ.get("SHAMAND_URL", "http://shamand:80")
+BLUEBIRD_URL = os.environ.get("BLUEBIRD_URL", "http://bluebird:80")
+PROVIDERMGRD_URL = os.environ.get("PROVIDERMGRD_URL", "http://providermgrd:80")
 
 # Mock Mode: when running locally without hardware mounts
 MOCK_MODE = os.environ.get("MOCK_MODE", "0") == "1"
@@ -22,10 +44,14 @@ _mock_file_system: Dict[str, list] = {}
 
 
 def _is_within_sandbox(resolved_path: str) -> bool:
-    """Check if a resolved (realpath) path is within allowed roots."""
+    """Check if a resolved (realpath) path is within allowed roots.
+
+    On the GNARBOX 2.0, storage is at /media/GNARBOX (NVMe) and SD cards
+    are auto-mounted under /media/<LABEL> by syslinkd. We allow any path
+    under /media/ to accommodate arbitrary card labels.
+    """
     return (
-        resolved_path.startswith("/media/nvme/") or resolved_path == "/media/nvme"
-        or resolved_path.startswith("/media/sd/") or resolved_path == "/media/sd"
+        resolved_path.startswith("/media/") or resolved_path == "/media"
         or resolved_path.startswith("/tmp/") or resolved_path == "/tmp"
     )
 
@@ -120,9 +146,7 @@ def scan_dir(path: str) -> List[Dict[str, Any]]:
 
     # Real mode — resolve, validate inline, then use
     safe_path = os.path.realpath(path)
-    if not (safe_path.startswith("/media/nvme/") or safe_path == "/media/nvme"
-            or safe_path.startswith("/media/sd/") or safe_path == "/media/sd"
-            or safe_path.startswith("/tmp/") or safe_path == "/tmp"):
+    if not _is_within_sandbox(safe_path):
         raise ValueError(f"Path outside allowed roots: {path}")
 
     files: List[Dict[str, Any]] = []
@@ -167,9 +191,7 @@ def hash_file(path: str) -> str:
 
     # Real mode — resolve, validate inline, then use
     safe_path = os.path.realpath(path)
-    if not (safe_path.startswith("/media/nvme/") or safe_path == "/media/nvme"
-            or safe_path.startswith("/media/sd/") or safe_path == "/media/sd"
-            or safe_path.startswith("/tmp/") or safe_path == "/tmp"):
+    if not _is_within_sandbox(safe_path):
         raise ValueError(f"Path outside allowed roots: {path}")
 
     if not os.path.exists(safe_path):
@@ -221,15 +243,11 @@ def check_duplicate(source: str, dest_dir: str) -> Dict[str, Any]:
 
     # Real mode — resolve and validate both paths inline
     safe_source = os.path.realpath(source)
-    if not (safe_source.startswith("/media/nvme/") or safe_source == "/media/nvme"
-            or safe_source.startswith("/media/sd/") or safe_source == "/media/sd"
-            or safe_source.startswith("/tmp/") or safe_source == "/tmp"):
+    if not _is_within_sandbox(safe_source):
         raise ValueError(f"Source path outside allowed roots: {source}")
 
     safe_dest_dir = os.path.realpath(dest_dir)
-    if not (safe_dest_dir.startswith("/media/nvme/") or safe_dest_dir == "/media/nvme"
-            or safe_dest_dir.startswith("/media/sd/") or safe_dest_dir == "/media/sd"
-            or safe_dest_dir.startswith("/tmp/") or safe_dest_dir == "/tmp"):
+    if not _is_within_sandbox(safe_dest_dir):
         raise ValueError(f"Dest path outside allowed roots: {dest_dir}")
 
     if not os.path.exists(safe_source):
@@ -299,15 +317,11 @@ def copy_file(source: str, dest: str) -> bool:
 
     # Real mode — resolve and validate both paths inline
     safe_source = os.path.realpath(source)
-    if not (safe_source.startswith("/media/nvme/") or safe_source == "/media/nvme"
-            or safe_source.startswith("/media/sd/") or safe_source == "/media/sd"
-            or safe_source.startswith("/tmp/") or safe_source == "/tmp"):
+    if not _is_within_sandbox(safe_source):
         raise ValueError(f"Source path outside allowed roots: {source}")
 
     safe_dest = os.path.realpath(dest)
-    if not (safe_dest.startswith("/media/nvme/") or safe_dest == "/media/nvme"
-            or safe_dest.startswith("/media/sd/") or safe_dest == "/media/sd"
-            or safe_dest.startswith("/tmp/") or safe_dest == "/tmp"):
+    if not _is_within_sandbox(safe_dest):
         raise ValueError(f"Dest path outside allowed roots: {dest}")
 
     os.makedirs(os.path.dirname(safe_dest), exist_ok=True)
@@ -324,9 +338,7 @@ def delete_file(path: str) -> bool:
 
     # Real mode — resolve, validate inline, then use
     safe_path = os.path.realpath(path)
-    if not (safe_path.startswith("/media/nvme/") or safe_path == "/media/nvme"
-            or safe_path.startswith("/media/sd/") or safe_path == "/media/sd"
-            or safe_path.startswith("/tmp/") or safe_path == "/tmp"):
+    if not _is_within_sandbox(safe_path):
         raise ValueError(f"Path outside allowed roots: {path}")
 
     if os.path.exists(safe_path):
@@ -356,11 +368,7 @@ def list_dir_contents(path: str) -> List[Dict[str, Any]]:
 
     # Real mode — resolve and validate path inline
     safe_path = os.path.realpath(path)
-    if safe_path == "/media":
-        pass  # /media is allowed as a browsing root
-    elif not (safe_path.startswith("/media/nvme/") or safe_path == "/media/nvme"
-              or safe_path.startswith("/media/sd/") or safe_path == "/media/sd"
-              or safe_path.startswith("/tmp/") or safe_path == "/tmp"):
+    if not _is_within_sandbox(safe_path):
         raise ValueError(f"Path outside allowed roots: {path}")
 
     files: List[Dict[str, Any]] = []
@@ -397,15 +405,11 @@ async def copy_file_chunked(source: str, dest: str):
 
     # Real mode — resolve and validate both paths inline
     safe_source = os.path.realpath(source)
-    if not (safe_source.startswith("/media/nvme/") or safe_source == "/media/nvme"
-            or safe_source.startswith("/media/sd/") or safe_source == "/media/sd"
-            or safe_source.startswith("/tmp/") or safe_source == "/tmp"):
+    if not _is_within_sandbox(safe_source):
         raise ValueError(f"Source path outside allowed roots: {source}")
 
     safe_dest = os.path.realpath(dest)
-    if not (safe_dest.startswith("/media/nvme/") or safe_dest == "/media/nvme"
-            or safe_dest.startswith("/media/sd/") or safe_dest == "/media/sd"
-            or safe_dest.startswith("/tmp/") or safe_dest == "/tmp"):
+    if not _is_within_sandbox(safe_dest):
         raise ValueError(f"Dest path outside allowed roots: {dest}")
 
     os.makedirs(os.path.dirname(safe_dest), exist_ok=True)
@@ -432,18 +436,14 @@ def create_zip_file(paths: List[str], output_path: str, max_mb: int = 4000) -> s
     """Create a ZIP archive from a list of file/directory paths."""
     # Validate and resolve output path inline
     safe_output = os.path.realpath(output_path)
-    if not (safe_output.startswith("/media/nvme/") or safe_output == "/media/nvme"
-            or safe_output.startswith("/media/sd/") or safe_output == "/media/sd"
-            or safe_output.startswith("/tmp/") or safe_output == "/tmp"):
+    if not _is_within_sandbox(safe_output):
         raise ValueError(f"Output path outside allowed roots: {output_path}")
 
     # Validate and resolve all input paths inline
     safe_paths = []
     for p in paths:
         resolved = os.path.realpath(p)
-        if (resolved.startswith("/media/nvme/") or resolved == "/media/nvme"
-                or resolved.startswith("/media/sd/") or resolved == "/media/sd"
-                or resolved.startswith("/tmp/") or resolved == "/tmp"):
+        if _is_within_sandbox(resolved):
             safe_paths.append(resolved)
 
     max_bytes = max_mb * 1024 * 1024

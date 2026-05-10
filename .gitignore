@@ -10,3 +10,4 @@ firmware/gbxos-install-image-2.8.0.1714.zip
 firmware/gbxos-install-image/gbxos-install-image.wic
 firmware/*.sh
 firmware/*.shell
+/docker-reversing
