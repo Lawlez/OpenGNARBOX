@@ -11,3 +11,4 @@ firmware/gbxos-install-image/gbxos-install-image.wic
 firmware/*.sh
 firmware/*.shell
 /docker-reversing
+openfirmware/sec.*
