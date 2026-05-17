@@ -13,7 +13,8 @@ from pydantic import BaseModel
 from system_utils import (
     get_storage_stats, get_battery_stats, NVME_MOUNT_PATH, SD_MOUNT_PATH,
     scan_dir, hash_file, copy_file, delete_file, list_dir_contents,
-    copy_file_chunked, create_zip_file, is_safe_path, check_duplicate
+    copy_file_chunked, create_zip_file, is_safe_path, check_duplicate,
+    oled_display, trigger_reboot
 )
 
 DOWNLOAD_SESSIONS = {}
@@ -60,6 +61,13 @@ def _scan_files(path: str):
         raise HTTPException(status_code=403, detail="Forbidden Path")
     try:
         files = scan_dir(path)
+        oled_display([
+            "OpenGNARBOX",
+            "",
+            f"Scanned {len(files)}",
+            f"files in",
+            f"{os.path.basename(path)}"
+        ])
         return {"files": files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -125,7 +133,7 @@ def _delete_file(req: PathRequest):
 @app.get("/api/files/list")
 def _list_files(path: str = "/media"):
     """List directory contents for the file browser."""
-    if path != "/media" and not is_safe_path(path):
+    if not is_safe_path(path):
         raise HTTPException(status_code=403, detail="Forbidden Path")
     try:
         files = list_dir_contents(path)
@@ -207,7 +215,24 @@ async def websocket_copy(websocket: WebSocket):
 
                 async for progress in copy_file_chunked(source, target):
                     await websocket.send_json({"progress": progress})
+                    # Update OLED at key milestones
+                    pct = int(progress)
+                    if pct in (25, 50, 75):
+                        bar = "\u2588" * (pct // 5) + "\u2591" * (20 - pct // 5)
+                        oled_display([
+                            "COPYING FILE",
+                            "",
+                            os.path.basename(source)[:21],
+                            "",
+                            bar,
+                            f"       {pct}%"
+                        ])
 
+                oled_display([
+                    "\u2713 COPY DONE",
+                    "",
+                    os.path.basename(source)[:21]
+                ], big=True)
                 await websocket.send_json({"status": "completed"})
             except Exception as e:
                 traceback.print_exc()
@@ -215,6 +240,41 @@ async def websocket_copy(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
+
+
+# ── System endpoints ──────────────────────────────────────────────────
+
+@app.post("/api/system/reboot")
+def _reboot_device():
+    """Trigger a cold reboot via the GNARBOX i2c controller."""
+    oled_display(["REBOOTING", "", "See you", "soon..."], big=True)
+    time.sleep(0.5)
+    success = trigger_reboot()
+    if not success:
+        raise HTTPException(status_code=500, detail="Reboot trigger failed")
+    return {"status": "rebooting"}
+
+
+@app.get("/api/system/power")
+def _get_power():
+    """Detailed power supply information."""
+    return get_battery_stats()
+
+
+# ── Startup OLED ──────────────────────────────────────────────────────
+
+@app.on_event("startup")
+def _startup_oled():
+    """Show OpenGNARBOX branding on the OLED at startup."""
+    oled_display([
+        "",
+        " OpenGNARBOX",
+        "",
+        "  API Ready",
+        "",
+        "  Reclaim your",
+        "  Hardware."
+    ])
 
 
 # Mount the static files (frontend dist built by Vite)

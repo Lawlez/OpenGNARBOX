@@ -1,0 +1,57 @@
+name: Build OpenGNARBOX Core Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to build'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  # Uses a repository variable if set, otherwise falls back to the default
+  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'opengnarbox/core' }}
+  IMAGE_TAG: ${{ inputs.image_tag || vars.IMAGE_TAG }}
+  TARBALL_NAME: 'opengnarbox-core.tar.gz'
+
+jobs:
+  build:
+    name: Build Image Tarball
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: amd64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          load: true
+
+      - name: Export Image to Tarball
+        run: |
+          echo "Exporting image ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} to ${{ env.TARBALL_NAME }}..."
+          docker save "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" | gzip > "${{ env.TARBALL_NAME }}"
+          
+          SIZE=$(du -h "${{ env.TARBALL_NAME }}" | cut -f1)
+          echo "Exported: ${{ env.TARBALL_NAME }} ($SIZE)"
+
+      - name: Upload Tarball Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opengnarbox-core-image
+          path: ${{ env.TARBALL_NAME }}
+          retention-days: 20

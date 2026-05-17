@@ -1,25 +1,62 @@
 version: '3.8'
 
+# ─────────────────────────────────────────────────────────────────────
+# OpenGNARBOX — Docker Compose for development / standalone deployment
+#
+# On the GNARBOX 2.0 device this is deployed via shivad into the
+# existing Docker Swarm alongside the legacy services.  The paths
+# below match the real device layout:
+#
+#   /media/GNARBOX      – 447 GB NVMe user storage
+#   /media/              – SD cards auto-mounted by syslinkd
+#   /app_data/           – encrypted config partition
+#   /run/syslinkd/       – network state Unix socket (host)
+#   /run/shivad/         – orchestrator Unix socket (host)
+#   /sys/class/power_supply – battery sysfs
+#
+# ─────────────────────────────────────────────────────────────────────
+
 services:
   opengnar-core:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
+    image: opengnarbox/core:latest
     container_name: opengnar-core
     restart: unless-stopped
     ports:
-      - "80:8000"
+      - "8000:8000"
     volumes:
-      # Expose host hardware/system info
+      # NVMe user storage (main backup target)
+      - /media/GNARBOX:/media/GNARBOX:rw
+      # SD card mount root — cards appear as /media/<LABEL> via syslinkd
+      - /media:/media:shared
+      # Battery / power sysfs
       - /sys/class/power_supply:/sys/class/power_supply:ro
-      # Expose storage devices
-      - /media/gnarbox/nvme:/media/nvme:rw
-      - /media/gnarbox/sd:/media/sd:ro
+      # OLED display binary (host-level, talks to /dev/spidev2.0)
+      - /usr/bin/oled-echo:/usr/bin/oled-echo:ro
+      # Device nodes (SPI for OLED)
+      - /dev:/dev
+      # i2c sysfs for reboot control
+      - /sys/bus/i2c:/sys/bus/i2c:rw
+      - /run/syslinkd/:/run/syslinkd/:ro
+      - /run/shivad/:/run/shivad/:ro
+      - /app_data:/app_data:ro
     privileged: true
     user: root
     mem_limit: 1024m
     environment:
       - MOCK_MODE=0
+      # Lgcy svc endpoints (docker DNS on ingress-net)
+      - TAPPERD_URL=http://tapperd:80
+      - TBD_URL=http://tbd:80
+      - MOONSHOTD_URL=http://moonshotd:80
+      - OVERLOOKD_URL=http://overlookd:80
+      - SHAMAND_URL=http://shamand:80
+      - BLUEBIRD_URL=http://bluebird:80
+      - PROVIDERMGRD_URL=http://providermgrd:80
+    networks:
+      - ingress-net
 
   opengnar-smb:
     image: dperson/samba:latest
@@ -29,6 +66,13 @@ services:
       - "139:139"
       - "445:445"
     volumes:
-      - /media/gnarbox/nvme:/media/nvme:rw
-    command: '-s "OpenGNAR;/media/nvme;yes;no;yes;all;none" -n -p'
+      - /media/GNARBOX:/media/GNARBOX:rw
+    command: '-s "OpenGNAR;/media/GNARBOX;yes;no;yes;all;none" -n -p'
     mem_limit: 512m
+    networks:
+      - ingress-net
+
+networks:
+  ingress-net:
+    external:
+      name: ingress-net

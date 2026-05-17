@@ -17,7 +17,7 @@ interface FileInfo {
 }
 
 export default function FileBrowser() {
-  const [currentPath, setCurrentPath] = useState<string>('/media/nvme');
+  const [currentPath, setCurrentPath] = useState<string>('/media/GNARBOX');
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
